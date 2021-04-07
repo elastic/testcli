@@ -1,0 +1,12 @@
+GOLANGCILINT_VERSION:=v1.39.0
+GOLICENSER_VERSION:=v0.3.1
+
+deps: golangci-lint go-licenser
+
+golangci-lint: bin/golangci-lint
+bin/golangci-lint:
+	@ go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCILINT_VERSION)
+
+go-licenser: bin/go-licenser
+bin/go-licenser:
+	@ go install github.com/elastic/go-licenser@$(GOLICENSER_VERSION)

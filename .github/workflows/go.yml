@@ -1,0 +1,41 @@
+name: Go
+
+on: [push, pull_request]
+
+jobs:
+  go:
+    name: CI
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+      id: go
+
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v2
+
+    - uses: actions/cache@v2
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Get dependencies
+      run: make deps
+      id: modules
+
+    - name: Linters
+      run: make lint
+      id: lint
+
+    - name: Run unit tests
+      run: make unit
+      id: unit
+
+    - name: Run integration tests
+      run: make integration
+      id: integration
