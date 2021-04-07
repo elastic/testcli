@@ -14,6 +14,8 @@ Provides a suite on top of the built-in Go `testing.T` to run a series of tests 
 
 ## Example usage
 
+Examples include a `// +build <tag>` to exclude them from the main go build since they're not the main application code.
+
 ### Basic suite testing the "ls" command
 
 ```go
@@ -113,7 +115,7 @@ func TestBasic_ls(t *testing.T) {
 }
 ```
 
-### Simulates a curl call and asserts its output.
+### Simulates a curl call and asserts its output.
 
 The test simulates a curl call (the payload is hardcoded for stability) and performs two test assertions concurrently and also performs a Go assertion on a decoded piece of data from the JSON payload.
 
