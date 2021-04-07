@@ -132,8 +132,8 @@ func TestBasic_decode(t *testing.T) {
 	}
 	engine.ExecuteTests(t, tests)
 
-	// Assert that the output of the hrefs is 4.
-	if length := len(testOutput.HRefs); length != 4 {
-		t.Errorf("expected hrefs to contain 4 items but got: %d", length)
+	// Assert that the output of the hrefs is 5.
+	if length := len(testOutput.HRefs); length != 5 {
+		t.Errorf("expected hrefs to contain 5 items but got: %d", length)
 	}
 }
