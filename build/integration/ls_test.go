@@ -80,7 +80,7 @@ func TestBasic_ls(t *testing.T) {
 				CanError: true,
 				Must: engine.Assertion{
 					Errors: []string{
-						"ls: unexisting_path: No such file or directory",
+						"No such file or directory",
 					},
 				},
 			},
