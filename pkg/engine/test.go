@@ -142,7 +142,10 @@ func (tc TestCallback) Run(out []byte, storage teststorage.Storage) error {
 			errs = append(errs, err)
 		}
 	}
-	return NewPrefixedError("callback", errors.Join(errs...))
+	if len(errs) > 0 {
+		return NewPrefixedError("callback", errors.Join(errs...))
+	}
+	return nil
 }
 
 // NewTestCallback creates a new callback
@@ -174,7 +177,7 @@ func (a Assertions) Ensure(stdout, stderr *bytes.Buffer, err error, storage test
 
 	// Performs all the assertions necessary to validate the output and result
 	// of a test case.
-	var out = stdout.String()
+	out := stdout.String()
 	var errs []error
 	if err := assertWanted(out, a.Must); err != nil {
 		errs = append(errs, err)
