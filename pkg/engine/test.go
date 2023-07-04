@@ -19,12 +19,11 @@ package engine
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
 	"time"
-
-	"github.com/elastic/cloud-sdk-go/pkg/multierror"
 
 	"github.com/elastic/testcli/pkg/engine/teststorage"
 )
@@ -137,11 +136,16 @@ type TestCallback map[string]Callback
 // Run calls each stored callback and stores the output of the command on the
 // passed storage via the prefixed key in the callback map.
 func (tc TestCallback) Run(out []byte, storage teststorage.Storage) error {
-	var merr = multierror.NewPrefixed("callback")
+	var errs []error
 	for key, callback := range tc {
-		merr = merr.Append(callback(out, key, storage))
+		if err := callback(out, key, storage); err != nil {
+			errs = append(errs, err)
+		}
 	}
-	return merr.ErrorOrNil()
+	if len(errs) > 0 {
+		return NewPrefixedError("callback", errors.Join(errs...))
+	}
+	return nil
 }
 
 // NewTestCallback creates a new callback
@@ -173,116 +177,136 @@ func (a Assertions) Ensure(stdout, stderr *bytes.Buffer, err error, storage test
 
 	// Performs all the assertions necessary to validate the output and result
 	// of a test case.
-	var out = stdout.String()
-	var merr = multierror.NewPrefixed("assertion")
+	out := stdout.String()
+	var errs []error
 	if err := assertWanted(out, a.Must); err != nil {
-		merr = merr.Append(err)
+		errs = append(errs, err)
 	}
 
 	if err := assertPattern(out, a.Must.Pattern); err != nil {
-		merr = merr.Append(err)
+		errs = append(errs, err)
 	}
 
 	if err := assertErrors(stderr, a.Must.Errors); err != nil {
-		merr = merr.Append(err)
+		errs = append(errs, err)
 	}
 
 	if err := assertDynamic(out, a.Must.Dynamic, storage); err != nil {
-		merr = merr.Append(err)
+		errs = append(errs, err)
 	}
 
 	// Ensures that the mustNot Output or Error is not found
 	// in the respective outputs
 	if err := assertMustNot(out, stderrString, a.Not); err != nil {
-		merr = merr.Append(err)
+		errs = append(errs, err)
 	}
 
-	return merr.ErrorOrNil()
+	if len(errs) > 0 {
+		return NewPrefixedError("assertion", errors.Join(errs...))
+	}
+	return nil
 }
 
 // Assertions
 
 func assertWanted(out string, w Assertion) error {
-	var merr = multierror.NewPrefixed("must find")
+	var errs []error
 	for _, want := range w.Output {
 		if w.Strict && out != want {
-			merr = merr.Append(fmt.Errorf("strict match got \"%s\" want \"%s\"", out, want))
+			errs = append(errs, fmt.Errorf("strict match got \"%s\" want \"%s\"", out, want))
 		}
 
 		if !w.Strict && !strings.Contains(out, want) {
-			merr = merr.Append(fmt.Errorf("didn't find \"%s\" in standard output: \"%s\"", want, out))
+			errs = append(errs, fmt.Errorf("didn't find \"%s\" in standard output: \"%s\"", want, out))
 		}
 	}
 
-	return merr.ErrorOrNil()
+	if len(errs) > 0 {
+		return NewPrefixedError("must find", errors.Join(errs...))
+	}
+	return nil
 }
 
 func assertPattern(out string, patterns []string) error {
-	var merr = multierror.NewPrefixed("must find pattern")
+	var errs []error
 	for _, pattern := range patterns {
 		re, err := regexp.Compile(pattern)
 		if err != nil {
-			merr = merr.Append(
+			errs = append(errs,
 				fmt.Errorf("match pattern \"%s\" did not compile", pattern),
 			)
 		}
 		if re.FindStringIndex(out) == nil {
-			merr = merr.Append(
+			errs = append(errs,
 				fmt.Errorf("couldn't match pattern \"%s\" to standard output: \"%s\"", pattern, out),
 			)
 		}
 	}
 
-	return merr.ErrorOrNil()
+	if len(errs) > 0 {
+		return NewPrefixedError("must find pattern", errors.Join(errs...))
+	}
+	return nil
 }
 
 func assertErrors(stderr *bytes.Buffer, errrs []string) error {
-	var merr = multierror.NewPrefixed("must find errors")
+	var errs []error
 	for _, want := range errrs {
 		if !strings.Contains(stderr.String(), want) {
-			merr = merr.Append(
+			errs = append(errs,
 				fmt.Errorf("didn't find \"%s\" in standard error: \"%s\"", want, stderr.String()),
 			)
 		}
 	}
 
-	return merr.ErrorOrNil()
+	if len(errs) > 0 {
+		return NewPrefixedError("must find errors", errors.Join(errs...))
+	}
+	return nil
 }
 
 func assertDynamic(out string, dynamic []string, storage teststorage.Storage) error {
-	var merr = multierror.NewPrefixed("must find values from dynamic storage")
+	var errs []error
 	for _, key := range dynamic {
 		value := key
 		if v, ok := storage.Get(key); ok {
 			value = v
 		}
 		if !strings.Contains(out, value) {
-			merr = merr.Append(
+			errs = append(errs,
 				fmt.Errorf("didn't find dynamic key \"%s\" with value \"%s\" in standard output: \"%s\"", key, value, out),
 			)
 		}
 	}
 
-	return merr.ErrorOrNil()
+	if len(errs) > 0 {
+		return NewPrefixedError("must find values from dynamic storage",
+			errors.Join(errs...),
+		)
+	}
+	return nil
 }
 
 func assertMustNot(out, stderr string, not Assertion) error {
-	var merr = multierror.NewPrefixed("must not find values")
+	var errs []error
 	for _, mustNot := range not.Output {
 		if not.Strict && out == mustNot {
-			merr = merr.Append(fmt.Errorf("strict match got \"%s\" must not: \"%s\"", out, mustNot))
+			errs = append(errs, fmt.Errorf("strict match got \"%s\" must not: \"%s\"", out, mustNot))
 		}
 
 		if !not.Strict && strings.Contains(out, mustNot) {
-			merr = merr.Append(fmt.Errorf("found \"%s\" in standard output: \"%s\"", mustNot, out))
+			errs = append(errs, fmt.Errorf("found \"%s\" in standard output: \"%s\"", mustNot, out))
 		}
 	}
 
 	for _, mustNot := range not.Errors {
 		if strings.Contains(stderr, mustNot) {
-			merr = merr.Append(fmt.Errorf("found \"%s\" in standard error:\"%s\"", mustNot, stderr))
+			errs = append(errs, fmt.Errorf("found \"%s\" in standard error:\"%s\"", mustNot, stderr))
 		}
 	}
 
-	return merr.ErrorOrNil()
+	if len(errs) > 0 {
+		return NewPrefixedError("must not find values", errors.Join(errs...))
+	}
+	return nil
 }

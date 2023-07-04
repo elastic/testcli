@@ -19,6 +19,7 @@ package engine
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -29,8 +30,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/elastic/cloud-sdk-go/pkg/multierror"
 
 	"github.com/elastic/testcli/pkg/engine/teststorage"
 )
@@ -98,23 +97,26 @@ func executeTestCase(t *testing.T, testN int, tt Test, storage teststorage.Stora
 	)
 
 	// Ensures the assertions.
-	var merr = multierror.NewPrefixed(fmt.Sprintf("[Test %d][%s]", testN, failRed))
+	var errs []error
 	if err := tt.Assert.Ensure(stdout, stderr, err, storage,
 		redactPasswordFlag(strings.Join(append([]string{binary}, args...), " ")),
 	); err != nil {
-		merr = merr.Append(err)
+		errs = append(errs, err)
 	}
 
 	// The callbacks are used to populate the storage on runtime.
 	// Decoding happens inside a tailored function which parses the []byte output
 	// to a specific data structure, which populates result[key].
 	if err := tt.Callbacks.Run(stdout.Bytes(), storage); err != nil {
-		merr = merr.Append(err)
+		errs = append(errs, err)
 	}
 
 	// Make the test fail.
-	if merr.ErrorOrNil() != nil {
-		t.Error(merr)
+	if len(errs) > 0 {
+		t.Error(NewPrefixedError(
+			fmt.Sprintf("[Test %d][%s]", testN, failRed),
+			errors.Join(errs...),
+		))
 	}
 }
 
